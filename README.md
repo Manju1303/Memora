@@ -2,7 +2,7 @@
 
 > **Your AI Assistant with Long-term Memory**
 
-An intelligent AI assistant that **remembers** your conversations, preferences, and important information across sessions. Built with Python, LangChain, ChromaDB, and local LLMs.
+An intelligent AI assistant that **remembers** your conversations, preferences, and important information across sessions. Built with Python, LangChain, ChromaDB, and supports both local and **FREE cloud** LLMs.
 
 ![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)
 ![LangChain](https://img.shields.io/badge/LangChain-0.1+-green.svg)
@@ -16,16 +16,30 @@ An intelligent AI assistant that **remembers** your conversations, preferences, 
 
 ---
 
+## 🌐 Try It Online (FREE!)
+
+**Deploy to Streamlit Cloud in minutes - completely FREE!**
+
+[![Deploy to Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/deploy)
+
+1. Fork this repo
+2. Go to [share.streamlit.io](https://share.streamlit.io)
+3. Connect your GitHub and select the Memora repo
+4. Add your FREE Hugging Face token in Secrets (see below)
+5. Deploy!
+
+---
+
 ## ✨ Features
 
 | Feature | Description |
 |---------|-------------|
 | 💬 **Smart Conversations** | Context-aware multi-turn dialogue |
 | 🧠 **Long-term Memory** | Remembers across sessions using vector DB |
-| 🎤 **Voice Input** | Speak instead of typing (Whisper) |
-| 🔊 **Voice Output** | Listen to responses (TTS) |
+| 🎤 **Voice Input** | Speak instead of typing (local only) |
+| 🔊 **Voice Output** | Listen to responses (local only) |
 | 🔍 **Semantic Search** | Find memories by meaning, not keywords |
-| 🔒 **Privacy First** | 100% local, no data sent to cloud |
+| ☁️ **Cloud Deployment** | Deploy FREE on Streamlit Cloud |
 | 👤 **Personalization** | Adapts to your preferences |
 
 ---
@@ -40,6 +54,55 @@ Memora: Nice to meet you, Alex! Python is a great choice...
 
 You: What's my name?
 Memora: Your name is Alex! You mentioned you love Python programming.
+```
+
+---
+
+## 🚀 Deployment Options
+
+### Option 1: ☁️ Cloud (FREE - Recommended!)
+
+Deploy on **Streamlit Community Cloud** with **Hugging Face** (both FREE):
+
+1. **Get FREE Hugging Face Token:**
+   - Go to [huggingface.co](https://huggingface.co) and create free account
+   - Navigate to Settings → Access Tokens
+   - Create a new token (free!)
+
+2. **Deploy to Streamlit Cloud:**
+   - Fork this repository
+   - Go to [share.streamlit.io](https://share.streamlit.io)
+   - Click "New app" → Select your fork
+   - Add secrets in Advanced Settings:
+     ```toml
+     HF_TOKEN = "your-free-token-here"
+     LLM_PROVIDER = "huggingface"
+     ```
+   - Deploy!
+
+### Option 2: 💻 Local (Full Features)
+
+Run locally with Ollama for voice features:
+
+```bash
+# Clone the repository
+git clone https://github.com/Manju1303/Memora.git
+cd Memora
+
+# Create virtual environment
+python -m venv venv
+venv\Scripts\activate  # Windows
+# source venv/bin/activate  # Linux/Mac
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Setup Ollama (download from https://ollama.ai)
+ollama pull mistral
+ollama serve
+
+# Run Memora
+streamlit run app.py
 ```
 
 ---
@@ -60,54 +123,11 @@ Memora: Your name is Alex! You mentioned you love Python programming.
          ┌───────────────────┼───────────────────┐
          ▼                   ▼                   ▼
 ┌─────────────────┐  ┌─────────────┐  ┌─────────────────────┐
-│   Ollama LLM    │  │ Short-term  │  │ ChromaDB (Vector)   │
-│   (Local AI)    │  │ Memory      │  │ Long-term Memory    │
+│  LLM Provider   │  │ Short-term  │  │ ChromaDB (Vector)   │
+│ HuggingFace/    │  │ Memory      │  │ Long-term Memory    │
+│ Ollama          │  │             │  │                     │
 └─────────────────┘  └─────────────┘  └─────────────────────┘
 ```
-
----
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Python 3.9+
-- [Ollama](https://ollama.ai) (for local LLM)
-
-### Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/Manju1303/Memora.git
-cd Memora
-
-# Create virtual environment
-python -m venv venv
-
-# Activate (Windows)
-venv\Scripts\activate
-# Activate (Linux/Mac)
-# source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-### Setup Ollama
-
-```bash
-# Download from https://ollama.ai, then:
-ollama pull mistral
-ollama serve
-```
-
-### Run Memora
-
-```bash
-streamlit run app.py
-```
-
-🎉 Open `http://localhost:8501` in your browser!
 
 ---
 
@@ -129,7 +149,7 @@ memora/
 │   ├── long_term.py          # Vector storage
 │   └── summarizer.py         # Fact extraction
 │
-├── voice/                    # 🎤 Voice Features
+├── voice/                    # 🎤 Voice Features (local only)
 │   ├── speech_to_text.py     # Whisper STT
 │   └── text_to_speech.py     # pyttsx3 TTS
 │
@@ -141,14 +161,16 @@ memora/
 
 ## ⚙️ Configuration
 
-Edit `config.py` to customize:
+Edit `config.py` or use Streamlit secrets:
 
 ```python
-OLLAMA_MODEL = "mistral"       # LLM model (mistral, llama2, codellama)
-SHORT_TERM_MEMORY_SIZE = 10    # Recent messages to keep
-MEMORY_RETRIEVAL_COUNT = 5     # Memories per query
-WHISPER_MODEL_SIZE = "base"    # tiny/base/small/medium/large
-TTS_RATE = 150                 # Speech speed (WPM)
+# Cloud (FREE)
+LLM_PROVIDER = "huggingface"
+HF_TOKEN = "your-free-token"
+
+# Local
+LLM_PROVIDER = "ollama"
+OLLAMA_MODEL = "mistral"
 ```
 
 ---
@@ -173,15 +195,20 @@ TTS_RATE = 150                 # Speech speed (WPM)
 
 ---
 
+## 🆓 Cost Breakdown
+
+| Component | Cost |
+|-----------|------|
+| Streamlit Cloud Hosting | **FREE** |
+| Hugging Face API | **FREE** |
+| ChromaDB | **FREE** |
+| Total | **$0/month** |
+
+---
+
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
 
 ---
 
@@ -195,18 +222,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - [LangChain](https://langchain.com) - Agent framework
 - [ChromaDB](https://www.trychroma.com) - Vector database
+- [Hugging Face](https://huggingface.co) - FREE cloud LLMs
 - [Ollama](https://ollama.ai) - Local LLM runtime
-- [Streamlit](https://streamlit.io) - UI framework
-- [OpenAI Whisper](https://github.com/openai/whisper) - Speech recognition
-
----
-
-## ⭐ Star History
-
-If you find Memora useful, please consider giving it a star! ⭐
+- [Streamlit](https://streamlit.io) - UI framework & FREE hosting
 
 ---
 
 <p align="center">
-  Made with ❤️ by the Memora Team
+  Made with ❤️ | 100% FREE and Open Source
 </p>

@@ -2,11 +2,11 @@
 streamlit>=1.28.0
 langchain>=0.1.0
 langchain-community>=0.0.10
-langchain-groq>=0.0.1
+langchain-huggingface>=0.0.1
+huggingface_hub>=0.19.0
 
-# LLM - Local (Ollama) or Cloud (Groq)
+# LLM - Local (Ollama) or Cloud (Hugging Face - FREE)
 ollama>=0.1.0
-groq>=0.4.0
 
 # Memory - Vector Database
 chromadb>=0.4.0

@@ -6,17 +6,18 @@ import os
 # =============================================================================
 # LLM Provider Configuration
 # =============================================================================
-# Options: "ollama" (local) or "groq" (cloud - for online deployment)
+# Options: "ollama" (local) or "huggingface" (cloud - FREE)
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama")
 
 # Ollama Configuration (Local)
 OLLAMA_BASE_URL = "http://localhost:11434"
 OLLAMA_MODEL = "mistral"  # Options: mistral, llama2, codellama, etc.
 
-# Groq Configuration (Cloud - Free API)
-# Get your free API key at: https://console.groq.com
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-GROQ_MODEL = "llama-3.1-8b-instant"  # Options: llama-3.1-8b-instant, mixtral-8x7b-32768
+# Hugging Face Configuration (Cloud - COMPLETELY FREE)
+# Get your free token at: https://huggingface.co/settings/tokens
+# Just create a free account, no credit card needed!
+HF_TOKEN = os.getenv("HF_TOKEN", "")
+HF_MODEL = "mistralai/Mistral-7B-Instruct-v0.3"  # Free model
 
 # =============================================================================
 # Memory Configuration

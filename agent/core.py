@@ -2,7 +2,7 @@
 Core Agent Module
 Main AI agent with memory-augmented generation capabilities.
 Implements RAG (Retrieval-Augmented Generation) pattern.
-Supports both local (Ollama) and cloud (Groq) LLMs.
+Supports both local (Ollama) and cloud (Hugging Face - FREE) LLMs.
 """
 from typing import Optional, Dict, Generator
 import os
@@ -17,8 +17,8 @@ from config import (
     LLM_PROVIDER,
     OLLAMA_BASE_URL,
     OLLAMA_MODEL,
-    GROQ_API_KEY,
-    GROQ_MODEL,
+    HF_TOKEN,
+    HF_MODEL,
     LLM_TEMPERATURE,
     MAX_TOKENS,
     DEFAULT_USER_ID
@@ -43,7 +43,7 @@ class MemoryAgent:
     - Semantic memory retrieval
     - Personalized responses
     - Context-aware conversations
-    - Supports local (Ollama) and cloud (Groq) LLMs
+    - Supports local (Ollama) and cloud (Hugging Face - FREE) LLMs
     """
     
     def __init__(self, user_id: str = DEFAULT_USER_ID):
@@ -57,61 +57,62 @@ class MemoryAgent:
         # Check Streamlit secrets first (for cloud deployment)
         try:
             if hasattr(st, 'secrets'):
-                if 'GROQ_API_KEY' in st.secrets and st.secrets['GROQ_API_KEY']:
-                    return "groq"
+                if 'HF_TOKEN' in st.secrets and st.secrets['HF_TOKEN']:
+                    return "huggingface"
                 if 'LLM_PROVIDER' in st.secrets:
                     return st.secrets['LLM_PROVIDER']
         except:
             pass
         
         # Check environment variables
-        if os.getenv('GROQ_API_KEY'):
-            return "groq"
+        if os.getenv('HF_TOKEN'):
+            return "huggingface"
         
         return LLM_PROVIDER
     
-    def _get_groq_api_key(self) -> str:
-        """Get Groq API key from secrets or environment."""
+    def _get_hf_token(self) -> str:
+        """Get Hugging Face token from secrets or environment."""
         try:
-            if hasattr(st, 'secrets') and 'GROQ_API_KEY' in st.secrets:
-                return st.secrets['GROQ_API_KEY']
+            if hasattr(st, 'secrets') and 'HF_TOKEN' in st.secrets:
+                return st.secrets['HF_TOKEN']
         except:
             pass
-        return os.getenv('GROQ_API_KEY', GROQ_API_KEY)
+        return os.getenv('HF_TOKEN', HF_TOKEN)
     
     def _setup_llm(self) -> None:
         """Initialize the LLM based on provider."""
         self._llm_available = False
         self.model_name = ""
         
-        if self.provider == "groq":
-            self._setup_groq()
+        if self.provider == "huggingface":
+            self._setup_huggingface()
         else:
             self._setup_ollama()
     
-    def _setup_groq(self) -> None:
-        """Initialize Groq cloud LLM."""
+    def _setup_huggingface(self) -> None:
+        """Initialize Hugging Face cloud LLM (FREE)."""
         try:
-            from langchain_groq import ChatGroq
+            from langchain_huggingface import HuggingFaceEndpoint
             
-            api_key = self._get_groq_api_key()
-            if not api_key:
-                print("Warning: GROQ_API_KEY not found")
+            token = self._get_hf_token()
+            if not token:
+                print("Warning: HF_TOKEN not found. Get free token at https://huggingface.co/settings/tokens")
                 return
             
-            self.llm = ChatGroq(
-                api_key=api_key,
-                model_name=GROQ_MODEL,
+            self.llm = HuggingFaceEndpoint(
+                repo_id=HF_MODEL,
+                huggingfacehub_api_token=token,
                 temperature=LLM_TEMPERATURE,
-                max_tokens=MAX_TOKENS
+                max_new_tokens=MAX_TOKENS,
+                task="text-generation"
             )
-            self.model_name = GROQ_MODEL
+            self.model_name = HF_MODEL.split("/")[-1]
             self._llm_available = True
-            print(f"Connected to Groq ({GROQ_MODEL})")
+            print(f"Connected to Hugging Face ({self.model_name})")
         except ImportError:
-            print("Warning: langchain-groq not installed. Run: pip install langchain-groq")
+            print("Warning: langchain-huggingface not installed. Run: pip install langchain-huggingface")
         except Exception as e:
-            print(f"Warning: Could not connect to Groq: {e}")
+            print(f"Warning: Could not connect to Hugging Face: {e}")
     
     def _setup_ollama(self) -> None:
         """Initialize Ollama local LLM."""
@@ -162,9 +163,9 @@ class MemoryAgent:
                 result = self.llm.invoke(prompt)
                 # Handle different response types
                 if hasattr(result, 'content'):
-                    response = result.content  # ChatGroq returns AIMessage
+                    response = result.content  # Chat models return AIMessage
                 else:
-                    response = str(result)  # Ollama returns string
+                    response = str(result)  # Text models return string
                 response = response.strip()
             except Exception as e:
                 print(f"LLM error: {e}")
@@ -218,10 +219,11 @@ class MemoryAgent:
     
     def _fallback_response(self, user_message: str) -> str:
         """Fallback response when LLM is not available."""
-        if self.provider == "groq":
+        if self.provider == "huggingface":
             return (
                 "I apologize, but I'm having trouble connecting to the AI service. "
-                "Please check that the GROQ_API_KEY is configured correctly.\n\n"
+                "Please check that the HF_TOKEN is configured correctly.\n\n"
+                "Get your FREE token at: https://huggingface.co/settings/tokens\n\n"
                 f"Your message was: {user_message}"
             )
         else:
