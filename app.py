@@ -1,6 +1,7 @@
 """
-AI Memory Assistant - Streamlit Frontend
-Main application with chat interface, voice interaction, and memory visualization.
+Memora - AI Memory Assistant
+Streamlit frontend with chat interface, voice interaction, and memory visualization.
+Supports both local (Ollama) and cloud (Groq) deployment.
 """
 import streamlit as st
 import sys
@@ -12,9 +13,14 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from agent.core import MemoryAgent
-from voice.text_to_speech import TextToSpeech
-from voice.speech_to_text import SpeechToText, record_audio
-from config import OLLAMA_MODEL, WHISPER_MODEL_SIZE
+
+# Voice features are optional (may not work in cloud deployment)
+try:
+    from voice.text_to_speech import TextToSpeech
+    from voice.speech_to_text import SpeechToText, record_audio
+    VOICE_AVAILABLE = True
+except ImportError:
+    VOICE_AVAILABLE = False
 
 
 # =============================================================================
@@ -146,17 +152,15 @@ def init_session_state():
     if "messages" not in st.session_state:
         st.session_state.messages = []
     
-    if "tts" not in st.session_state:
-        st.session_state.tts = TextToSpeech()
-    
-    if "stt" not in st.session_state:
-        st.session_state.stt = SpeechToText()
-    
     if "voice_enabled" not in st.session_state:
         st.session_state.voice_enabled = False
     
-    if "recording" not in st.session_state:
-        st.session_state.recording = False
+    # Initialize voice features if available
+    if VOICE_AVAILABLE:
+        if "tts" not in st.session_state:
+            st.session_state.tts = TextToSpeech()
+        if "stt" not in st.session_state:
+            st.session_state.stt = SpeechToText()
 
 
 init_session_state()
@@ -171,11 +175,18 @@ with st.sidebar:
     
     # Status
     agent_status = st.session_state.agent.get_status()
+    provider = agent_status.get("provider", "unknown")
+    model = agent_status.get("model", "unknown")
+    
     if agent_status["llm_available"]:
-        st.markdown(f'<p class="status-online">● LLM Connected ({OLLAMA_MODEL})</p>', unsafe_allow_html=True)
+        provider_icon = "☁️" if provider == "groq" else "💻"
+        st.markdown(f'<p class="status-online">{provider_icon} Connected ({model})</p>', unsafe_allow_html=True)
     else:
         st.markdown('<p class="status-offline">● LLM Offline</p>', unsafe_allow_html=True)
-        st.warning("Start Ollama: `ollama serve`")
+        if provider == "groq":
+            st.warning("Check GROQ_API_KEY")
+        else:
+            st.warning("Start Ollama: `ollama serve`")
     
     st.markdown("---")
     
@@ -191,13 +202,17 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # Voice Settings
-    st.markdown("### 🎤 Voice Settings")
-    st.session_state.voice_enabled = st.toggle("Enable Voice Output", value=st.session_state.voice_enabled)
-    
-    if st.session_state.voice_enabled:
-        tts_rate = st.slider("Speech Rate", 100, 250, 150)
-        st.session_state.tts.set_rate(tts_rate)
+    # Voice Settings (only show if available)
+    if VOICE_AVAILABLE:
+        st.markdown("### 🎤 Voice Settings")
+        st.session_state.voice_enabled = st.toggle("Enable Voice Output", value=st.session_state.voice_enabled)
+        
+        if st.session_state.voice_enabled:
+            tts_rate = st.slider("Speech Rate", 100, 250, 150)
+            st.session_state.tts.set_rate(tts_rate)
+    else:
+        st.markdown("### 🎤 Voice")
+        st.info("Voice features not available in cloud mode")
     
     st.markdown("---")
     
@@ -292,26 +307,29 @@ with chat_container:
 # =============================================================================
 st.markdown("---")
 
-# Voice recording section
-col1, col2 = st.columns([4, 1])
-
-with col1:
+# Voice recording section (only if voice is available)
+if VOICE_AVAILABLE:
+    col1, col2 = st.columns([4, 1])
+    
+    with col1:
+        user_input = st.chat_input("Type your message here...")
+    
+    with col2:
+        if st.button("🎤 Voice", use_container_width=True, help="Click to record voice input"):
+            with st.spinner("Recording... (5 seconds)"):
+                audio = record_audio(duration=5.0)
+                if audio is not None:
+                    with st.spinner("Transcribing..."):
+                        if not st.session_state.stt.is_ready():
+                            st.session_state.stt.load_model()
+                        text = st.session_state.stt.transcribe(audio)
+                        if text and not text.startswith("Error"):
+                            user_input = text
+                            st.success(f"Transcribed: {text}")
+                        else:
+                            st.error("Could not transcribe audio")
+else:
     user_input = st.chat_input("Type your message here...")
-
-with col2:
-    if st.button("🎤 Voice", use_container_width=True, help="Click to record voice input"):
-        with st.spinner("Recording... (5 seconds)"):
-            audio = record_audio(duration=5.0)
-            if audio is not None:
-                with st.spinner("Transcribing..."):
-                    if not st.session_state.stt.is_ready():
-                        st.session_state.stt.load_model()
-                    text = st.session_state.stt.transcribe(audio)
-                    if text and not text.startswith("Error"):
-                        user_input = text
-                        st.success(f"Transcribed: {text}")
-                    else:
-                        st.error("Could not transcribe audio")
 
 
 # Process input
@@ -326,8 +344,8 @@ if user_input:
     # Add assistant message
     st.session_state.messages.append({"role": "assistant", "content": response})
     
-    # Voice output if enabled
-    if st.session_state.voice_enabled:
+    # Voice output if enabled and available
+    if VOICE_AVAILABLE and st.session_state.voice_enabled:
         st.session_state.tts.speak_async(response)
     
     # Rerun to update UI

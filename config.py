@@ -1,13 +1,22 @@
 """
-Configuration settings for AI Memory Assistant
+Configuration settings for Memora - AI Memory Assistant
 """
 import os
 
 # =============================================================================
-# LLM Configuration (Ollama)
+# LLM Provider Configuration
 # =============================================================================
+# Options: "ollama" (local) or "groq" (cloud - for online deployment)
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama")
+
+# Ollama Configuration (Local)
 OLLAMA_BASE_URL = "http://localhost:11434"
 OLLAMA_MODEL = "mistral"  # Options: mistral, llama2, codellama, etc.
+
+# Groq Configuration (Cloud - Free API)
+# Get your free API key at: https://console.groq.com
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL = "llama-3.1-8b-instant"  # Options: llama-3.1-8b-instant, mixtral-8x7b-32768
 
 # =============================================================================
 # Memory Configuration

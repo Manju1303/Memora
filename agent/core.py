@@ -2,19 +2,23 @@
 Core Agent Module
 Main AI agent with memory-augmented generation capabilities.
 Implements RAG (Retrieval-Augmented Generation) pattern.
+Supports both local (Ollama) and cloud (Groq) LLMs.
 """
 from typing import Optional, Dict, Generator
+import os
 import sys
 sys.path.append('..')
 
-from langchain_community.llms import Ollama
-from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
+import streamlit as st
 
 from .memory_manager import MemoryManager
 from .prompts import get_memory_aware_prompt, SYSTEM_PROMPT
 from config import (
+    LLM_PROVIDER,
     OLLAMA_BASE_URL,
     OLLAMA_MODEL,
+    GROQ_API_KEY,
+    GROQ_MODEL,
     LLM_TEMPERATURE,
     MAX_TOKENS,
     DEFAULT_USER_ID
@@ -39,27 +43,93 @@ class MemoryAgent:
     - Semantic memory retrieval
     - Personalized responses
     - Context-aware conversations
+    - Supports local (Ollama) and cloud (Groq) LLMs
     """
     
     def __init__(self, user_id: str = DEFAULT_USER_ID):
         self.user_id = user_id
         self.memory = MemoryManager(user_id=user_id)
+        self.provider = self._get_provider()
         self._setup_llm()
     
-    def _setup_llm(self) -> None:
-        """Initialize the Ollama LLM."""
+    def _get_provider(self) -> str:
+        """Determine which LLM provider to use."""
+        # Check Streamlit secrets first (for cloud deployment)
         try:
+            if hasattr(st, 'secrets'):
+                if 'GROQ_API_KEY' in st.secrets and st.secrets['GROQ_API_KEY']:
+                    return "groq"
+                if 'LLM_PROVIDER' in st.secrets:
+                    return st.secrets['LLM_PROVIDER']
+        except:
+            pass
+        
+        # Check environment variables
+        if os.getenv('GROQ_API_KEY'):
+            return "groq"
+        
+        return LLM_PROVIDER
+    
+    def _get_groq_api_key(self) -> str:
+        """Get Groq API key from secrets or environment."""
+        try:
+            if hasattr(st, 'secrets') and 'GROQ_API_KEY' in st.secrets:
+                return st.secrets['GROQ_API_KEY']
+        except:
+            pass
+        return os.getenv('GROQ_API_KEY', GROQ_API_KEY)
+    
+    def _setup_llm(self) -> None:
+        """Initialize the LLM based on provider."""
+        self._llm_available = False
+        self.model_name = ""
+        
+        if self.provider == "groq":
+            self._setup_groq()
+        else:
+            self._setup_ollama()
+    
+    def _setup_groq(self) -> None:
+        """Initialize Groq cloud LLM."""
+        try:
+            from langchain_groq import ChatGroq
+            
+            api_key = self._get_groq_api_key()
+            if not api_key:
+                print("Warning: GROQ_API_KEY not found")
+                return
+            
+            self.llm = ChatGroq(
+                api_key=api_key,
+                model_name=GROQ_MODEL,
+                temperature=LLM_TEMPERATURE,
+                max_tokens=MAX_TOKENS
+            )
+            self.model_name = GROQ_MODEL
+            self._llm_available = True
+            print(f"Connected to Groq ({GROQ_MODEL})")
+        except ImportError:
+            print("Warning: langchain-groq not installed. Run: pip install langchain-groq")
+        except Exception as e:
+            print(f"Warning: Could not connect to Groq: {e}")
+    
+    def _setup_ollama(self) -> None:
+        """Initialize Ollama local LLM."""
+        try:
+            from langchain_community.llms import Ollama
+            
             self.llm = Ollama(
                 base_url=OLLAMA_BASE_URL,
                 model=OLLAMA_MODEL,
                 temperature=LLM_TEMPERATURE,
                 num_predict=MAX_TOKENS
             )
+            self.model_name = OLLAMA_MODEL
             self._llm_available = True
+            print(f"Connected to Ollama ({OLLAMA_MODEL})")
         except Exception as e:
             print(f"Warning: Could not connect to Ollama: {e}")
             print("Make sure Ollama is running: ollama serve")
-            self._llm_available = False
     
     def chat(self, user_message: str) -> str:
         """
@@ -72,12 +142,6 @@ class MemoryAgent:
         4. Generate response with LLM
         5. Store response in memory
         6. Return response
-        
-        Args:
-            user_message: The user's input text
-        
-        Returns:
-            The assistant's response
         """
         # Step 1: Store user message
         self.memory.add_user_message(user_message)
@@ -95,7 +159,12 @@ class MemoryAgent:
             response = self._fallback_response(user_message)
         else:
             try:
-                response = self.llm.invoke(prompt)
+                result = self.llm.invoke(prompt)
+                # Handle different response types
+                if hasattr(result, 'content'):
+                    response = result.content  # ChatGroq returns AIMessage
+                else:
+                    response = str(result)  # Ollama returns string
                 response = response.strip()
             except Exception as e:
                 print(f"LLM error: {e}")
@@ -110,15 +179,7 @@ class MemoryAgent:
         return response
     
     def chat_stream(self, user_message: str) -> Generator[str, None, None]:
-        """
-        Stream a response token by token.
-        
-        Args:
-            user_message: The user's input text
-        
-        Yields:
-            Response tokens as they're generated
-        """
+        """Stream a response token by token."""
         # Store user message
         self.memory.add_user_message(user_message)
         
@@ -140,8 +201,12 @@ class MemoryAgent:
             try:
                 # Stream response
                 for chunk in self.llm.stream(prompt):
-                    yield chunk
-                    full_response += chunk
+                    if hasattr(chunk, 'content'):
+                        text = chunk.content
+                    else:
+                        text = str(chunk)
+                    yield text
+                    full_response += text
             except Exception as e:
                 error_msg = f"Error: {e}"
                 yield error_msg
@@ -153,14 +218,21 @@ class MemoryAgent:
     
     def _fallback_response(self, user_message: str) -> str:
         """Fallback response when LLM is not available."""
-        return (
-            "I apologize, but I'm having trouble connecting to my language model. "
-            "Please make sure Ollama is running:\n"
-            "1. Install Ollama from https://ollama.ai\n"
-            "2. Run: ollama pull mistral\n"
-            "3. Run: ollama serve\n\n"
-            f"Your message was: {user_message}"
-        )
+        if self.provider == "groq":
+            return (
+                "I apologize, but I'm having trouble connecting to the AI service. "
+                "Please check that the GROQ_API_KEY is configured correctly.\n\n"
+                f"Your message was: {user_message}"
+            )
+        else:
+            return (
+                "I apologize, but I'm having trouble connecting to my language model. "
+                "Please make sure Ollama is running:\n"
+                "1. Install Ollama from https://ollama.ai\n"
+                "2. Run: ollama pull mistral\n"
+                "3. Run: ollama serve\n\n"
+                f"Your message was: {user_message}"
+            )
     
     def remember(self, fact: str) -> str:
         """Explicitly remember a fact."""
@@ -205,11 +277,12 @@ class MemoryAgent:
         """Get agent status information."""
         return {
             "llm_available": self._llm_available,
-            "model": OLLAMA_MODEL,
+            "provider": self.provider,
+            "model": self.model_name,
             "user_id": self.user_id,
             "memory_stats": self.get_memory_stats()
         }
     
     def __repr__(self) -> str:
         status = "ready" if self._llm_available else "offline"
-        return f"MemoryAgent(user={self.user_id}, status={status})"
+        return f"MemoryAgent(user={self.user_id}, provider={self.provider}, status={status})"
