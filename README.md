@@ -1,3 +1,15 @@
+---
+title: Memora
+emoji: 🧠
+colorFrom: purple
+colorTo: blue
+sdk: streamlit
+sdk_version: 1.28.0
+app_file: app.py
+pinned: false
+license: mit
+---
+
 # 🧠 Memora
 
 > **Your AI Assistant with Long-term Memory**

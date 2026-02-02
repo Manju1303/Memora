@@ -35,107 +35,171 @@ st.set_page_config(
 
 
 # =============================================================================
-# Custom CSS for Premium UI
+# Custom CSS for Premium Dark UI
 # =============================================================================
 st.markdown("""
 <style>
-    /* Main theme */
+    /* Import Google Font */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    
+    /* Global Dark Theme */
     .stApp {
-        background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
+        background: linear-gradient(135deg, #0a0a0f 0%, #0d0d15 50%, #0a0a12 100%);
+        font-family: 'Inter', sans-serif;
     }
     
-    /* Chat messages */
+    /* Hide Streamlit branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* Chat messages with glassmorphism */
     .chat-message {
-        padding: 1rem;
-        border-radius: 12px;
-        margin: 0.5rem 0;
-        animation: fadeIn 0.3s ease-in;
+        padding: 1.2rem;
+        border-radius: 16px;
+        margin: 0.75rem 0;
+        animation: fadeIn 0.4s ease-out;
+        backdrop-filter: blur(10px);
     }
     
     .user-message {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.9) 0%, rgba(118, 75, 162, 0.9) 100%);
         color: white;
-        margin-left: 20%;
+        margin-left: 15%;
+        box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.1);
     }
     
     .assistant-message {
-        background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
-        color: #e0e0e0;
-        margin-right: 20%;
-        border: 1px solid #3d5a80;
+        background: linear-gradient(135deg, rgba(20, 30, 48, 0.95) 0%, rgba(36, 59, 85, 0.95) 100%);
+        color: #e8e8e8;
+        margin-right: 15%;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.08);
     }
     
     @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
+        from { opacity: 0; transform: translateY(15px); }
         to { opacity: 1; transform: translateY(0); }
     }
     
-    /* Header styling */
+    /* Animated gradient header */
     .main-header {
         text-align: center;
-        padding: 1rem;
-        background: linear-gradient(90deg, #667eea, #764ba2, #667eea);
-        background-size: 200% auto;
+        padding: 1.5rem;
+        background: linear-gradient(90deg, #667eea, #764ba2, #f093fb, #667eea);
+        background-size: 300% auto;
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        animation: gradient 3s linear infinite;
-        font-size: 2.5rem;
-        font-weight: bold;
+        background-clip: text;
+        animation: shimmer 4s ease-in-out infinite;
+        font-size: 3rem;
+        font-weight: 700;
+        letter-spacing: -1px;
     }
     
-    @keyframes gradient {
-        0% { background-position: 0% center; }
-        100% { background-position: 200% center; }
+    @keyframes shimmer {
+        0%, 100% { background-position: 0% center; }
+        50% { background-position: 100% center; }
     }
     
-    /* Stats cards */
+    /* Glassmorphism cards */
     .stat-card {
-        background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
-        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 16px;
+        padding: 1.2rem;
+        margin: 0.5rem 0;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        backdrop-filter: blur(10px);
+    }
+    
+    /* Memory items with glow */
+    .memory-item {
+        background: rgba(102, 126, 234, 0.08);
+        border-left: 3px solid #667eea;
         padding: 1rem;
         margin: 0.5rem 0;
-        border: 1px solid #3d5a80;
+        border-radius: 0 12px 12px 0;
+        transition: all 0.3s ease;
     }
     
-    /* Memory items */
-    .memory-item {
-        background: rgba(102, 126, 234, 0.1);
-        border-left: 3px solid #667eea;
-        padding: 0.75rem;
-        margin: 0.5rem 0;
-        border-radius: 0 8px 8px 0;
+    .memory-item:hover {
+        background: rgba(102, 126, 234, 0.15);
+        box-shadow: 0 4px 20px rgba(102, 126, 234, 0.2);
     }
     
-    /* Voice button */
-    .voice-btn {
-        background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
-        border: none;
-        padding: 0.75rem 1.5rem;
-        border-radius: 25px;
-        color: white;
-        font-weight: bold;
-        cursor: pointer;
-        transition: transform 0.2s;
-    }
-    
-    .voice-btn:hover {
-        transform: scale(1.05);
-    }
-    
-    /* Sidebar styling */
+    /* Premium sidebar */
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+        background: linear-gradient(180deg, #0d0d15 0%, #0a0a12 100%);
+        border-right: 1px solid rgba(255, 255, 255, 0.05);
     }
     
-    /* Status indicator */
+    [data-testid="stSidebar"] .stMarkdown {
+        color: #e0e0e0;
+    }
+    
+    /* Status indicators with glow */
     .status-online {
         color: #00ff88;
-        font-weight: bold;
+        font-weight: 600;
+        text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
     }
     
     .status-offline {
         color: #ff6b6b;
-        font-weight: bold;
+        font-weight: 600;
+        text-shadow: 0 0 10px rgba(255, 107, 107, 0.5);
+    }
+    
+    /* Button styling */
+    .stButton > button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        padding: 0.6rem 1.2rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    }
+    
+    /* Input styling */
+    .stTextInput > div > div > input,
+    .stTextArea > div > div > textarea {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        color: #ffffff;
+    }
+    
+    .stTextInput > div > div > input:focus,
+    .stTextArea > div > div > textarea:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+    }
+    
+    /* Chat input */
+    [data-testid="stChatInput"] {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+    }
+    
+    /* Metrics styling */
+    [data-testid="stMetricValue"] {
+        color: #667eea;
+        font-weight: 700;
+    }
+    
+    /* Expander styling */
+    .streamlit-expanderHeader {
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 12px;
     }
 </style>
 """, unsafe_allow_html=True)
