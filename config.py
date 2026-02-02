@@ -6,18 +6,22 @@ import os
 # =============================================================================
 # LLM Provider Configuration
 # =============================================================================
+# Auto-detect if running on Hugging Face Spaces (FREE hosting!)
+IS_HF_SPACE = os.getenv("SPACE_ID") is not None
+
 # Options: "ollama" (local) or "huggingface" (cloud - FREE)
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama")
+# Automatically uses huggingface when deployed to HF Spaces
+LLM_PROVIDER = "huggingface" if IS_HF_SPACE else os.getenv("LLM_PROVIDER", "ollama")
 
 # Ollama Configuration (Local)
 OLLAMA_BASE_URL = "http://localhost:11434"
 OLLAMA_MODEL = "mistral"  # Options: mistral, llama2, codellama, etc.
 
 # Hugging Face Configuration (Cloud - COMPLETELY FREE)
-# Get your free token at: https://huggingface.co/settings/tokens
-# Just create a free account, no credit card needed!
+# When running on HF Spaces, uses the built-in inference API (no token needed!)
+# For local use, get your free token at: https://huggingface.co/settings/tokens
 HF_TOKEN = os.getenv("HF_TOKEN", "")
-HF_MODEL = "mistralai/Mistral-7B-Instruct-v0.3"  # Free model
+HF_MODEL = "HuggingFaceH4/zephyr-7b-beta"  # Free, fast, and high quality
 
 # =============================================================================
 # Memory Configuration

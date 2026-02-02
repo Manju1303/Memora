@@ -54,7 +54,11 @@ class MemoryAgent:
     
     def _get_provider(self) -> str:
         """Determine which LLM provider to use."""
-        # Check Streamlit secrets first (for cloud deployment)
+        # Auto-detect Hugging Face Spaces
+        if os.getenv('SPACE_ID'):
+            return "huggingface"
+        
+        # Check Streamlit secrets (for Streamlit Cloud deployment)
         try:
             if hasattr(st, 'secrets'):
                 if 'HF_TOKEN' in st.secrets and st.secrets['HF_TOKEN']:
@@ -92,25 +96,27 @@ class MemoryAgent:
     def _setup_huggingface(self) -> None:
         """Initialize Hugging Face cloud LLM (FREE)."""
         try:
-            from langchain_huggingface import HuggingFaceEndpoint
+            from huggingface_hub import InferenceClient
             
             token = self._get_hf_token()
-            if not token:
+            is_hf_space = os.getenv('SPACE_ID') is not None
+            
+            # On HF Spaces, token is optional (uses built-in inference)
+            if not token and not is_hf_space:
                 print("Warning: HF_TOKEN not found. Get free token at https://huggingface.co/settings/tokens")
                 return
             
-            self.llm = HuggingFaceEndpoint(
-                repo_id=HF_MODEL,
-                huggingfacehub_api_token=token,
-                temperature=LLM_TEMPERATURE,
-                max_new_tokens=MAX_TOKENS,
-                task="text-generation"
+            # Use InferenceClient for more reliable inference
+            self.hf_client = InferenceClient(
+                model=HF_MODEL,
+                token=token if token else None
             )
             self.model_name = HF_MODEL.split("/")[-1]
             self._llm_available = True
+            self._use_hf_client = True
             print(f"Connected to Hugging Face ({self.model_name})")
         except ImportError:
-            print("Warning: langchain-huggingface not installed. Run: pip install langchain-huggingface")
+            print("Warning: huggingface_hub not installed. Run: pip install huggingface_hub")
         except Exception as e:
             print(f"Warning: Could not connect to Hugging Face: {e}")
     
@@ -160,13 +166,22 @@ class MemoryAgent:
             response = self._fallback_response(user_message)
         else:
             try:
-                result = self.llm.invoke(prompt)
-                # Handle different response types
-                if hasattr(result, 'content'):
-                    response = result.content  # Chat models return AIMessage
+                # Use HuggingFace InferenceClient if available
+                if hasattr(self, '_use_hf_client') and self._use_hf_client:
+                    result = self.hf_client.text_generation(
+                        prompt,
+                        max_new_tokens=MAX_TOKENS,
+                        temperature=LLM_TEMPERATURE
+                    )
+                    response = result.strip()
                 else:
-                    response = str(result)  # Text models return string
-                response = response.strip()
+                    # Use LangChain LLM (Ollama)
+                    result = self.llm.invoke(prompt)
+                    if hasattr(result, 'content'):
+                        response = result.content
+                    else:
+                        response = str(result)
+                    response = response.strip()
             except Exception as e:
                 print(f"LLM error: {e}")
                 response = self._fallback_response(user_message)
@@ -200,14 +215,25 @@ class MemoryAgent:
             full_response = response
         else:
             try:
-                # Stream response
-                for chunk in self.llm.stream(prompt):
-                    if hasattr(chunk, 'content'):
-                        text = chunk.content
-                    else:
-                        text = str(chunk)
-                    yield text
-                    full_response += text
+                if hasattr(self, '_use_hf_client') and self._use_hf_client:
+                    # HF InferenceClient streaming
+                    for token in self.hf_client.text_generation(
+                        prompt,
+                        max_new_tokens=MAX_TOKENS,
+                        temperature=LLM_TEMPERATURE,
+                        stream=True
+                    ):
+                        yield token
+                        full_response += token
+                else:
+                    # Stream response with Ollama
+                    for chunk in self.llm.stream(prompt):
+                        if hasattr(chunk, 'content'):
+                            text = chunk.content
+                        else:
+                            text = str(chunk)
+                        yield text
+                        full_response += text
             except Exception as e:
                 error_msg = f"Error: {e}"
                 yield error_msg
