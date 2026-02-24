@@ -444,11 +444,47 @@ with tab1:
 
     if user_input:
         st.session_state.messages.append({"role": "user", "content": user_input})
-        with st.spinner("Thinking..."):
-            response = st.session_state.agent.chat(user_input, system_context=system_prompt)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+        
+        # DISPLAY USER MESSAGE IMMEDIATELY
+        with chat_container:
+            st.markdown(f"""
+            <div class="chat-message user-message">
+                <strong>You:</strong><br>{user_input}
+            </div>
+            """, unsafe_allow_html=True)
+
+        # GENERATE AND STREAM RESPONSE
+        response_placeholder = st.empty()
+        full_response = ""
+        
+        with response_placeholder:
+            with st.spinner("Thinking..."):
+                # Use the streaming chat method
+                response_generator = st.session_state.agent.chat_stream(user_input, system_context=system_prompt)
+                
+                # Check if it returned a generator or a string (in case of fallback/error)
+                if isinstance(response_generator, str):
+                    full_response = response_generator
+                    st.markdown(f"""
+                    <div class="chat-message assistant-message">
+                        <strong>🤖 Assistant:</strong><br>{full_response}
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    # Initialize the message bubble
+                    bubble_template = '<div class="chat-message assistant-message"><strong>🤖 Assistant:</strong><br>{}</div>'
+                    
+                    for chunk in response_generator:
+                        full_response += chunk
+                        # Update the UI with the accumulated response
+                        response_placeholder.markdown(bubble_template.format(full_response), unsafe_allow_html=True)
+        
+        # Save to session state
+        st.session_state.messages.append({"role": "assistant", "content": full_response})
+        
         if VOICE_AVAILABLE and st.session_state.voice_enabled:
-            st.session_state.tts.speak_async(response)
+            st.session_state.tts.speak_async(full_response)
+        
         st.rerun()
 
 with tab2:
