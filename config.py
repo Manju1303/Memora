@@ -11,7 +11,7 @@ IS_HF_SPACE = os.getenv("SPACE_ID") is not None
 
 # Options: "ollama" (local) or "huggingface" (cloud - FREE)
 # Automatically uses huggingface when deployed to HF Spaces
-LLM_PROVIDER = "huggingface" if IS_HF_SPACE else os.getenv("LLM_PROVIDER", "ollama")
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama")
 
 # Ollama Configuration (Local)
 OLLAMA_BASE_URL = "http://localhost:11434"

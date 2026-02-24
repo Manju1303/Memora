@@ -72,23 +72,35 @@ class MemoryManager:
         Check if content contains important information to store.
         Automatically extracts and stores user preferences and facts.
         """
-        if role != "user":
+        if role != "user" or len(content) < 5:
             return
         
-        # Simple heuristics for important information
+        # IMPROVED ACCURACY: Expanded keyword list and sentiment/intent patterns
         important_keywords = [
             "my name is", "i am", "i'm", "i like", "i love",
             "i prefer", "i work", "i live", "i study",
-            "my favorite", "i always", "i never", "remember that"
+            "my favorite", "i always", "i never", "remember that",
+            "don't forget", "i want", "i need", "my goal",
+            "i use", "i've been", "i was", "i am from"
         ]
         
         content_lower = content.lower()
         
-        for keyword in important_keywords:
-            if keyword in content_lower:
-                # Store as a fact
-                self.long_term.store_important_fact(content)
-                break
+        # Check if any keyword matches
+        is_important = any(keyword in content_lower for keyword in important_keywords)
+        
+        # Also check for explicit "remember" commands
+        if "remember" in content_lower or "keep in mind" in content_lower:
+            is_important = True
+            
+        if is_important:
+            # OPTIMIZATION: Store in background to avoid blocking the main chat flow
+            import threading
+            threading.Thread(
+                target=self.long_term.store_important_fact, 
+                args=(content,), 
+                daemon=True
+            ).start()
     
     def process_end_of_conversation(self) -> None:
         """

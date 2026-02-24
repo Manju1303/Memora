@@ -13,6 +13,12 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from agent.core import MemoryAgent
+from agent.prompts import (
+    SYSTEM_PROMPT, 
+    TAMIL_SYSTEM_PROMPT, 
+    ACADEMIC_PROMPT, 
+    CONTENT_CREATION_PROMPT
+)
 
 # Voice features are optional (may not work in cloud deployment)
 try:
@@ -249,6 +255,14 @@ with st.sidebar:
         st.markdown('<p class="status-offline">● LLM Offline</p>', unsafe_allow_html=True)
         if provider == "groq":
             st.warning("Check GROQ_API_KEY")
+        elif provider == "huggingface":
+            # Add API Key input field
+            api_key = st.text_input("Enter Hugging Face Token:", type="password")
+            if api_key:
+                st.session_state.HF_TOKEN = api_key
+                st.session_state.agent = MemoryAgent() # Re-initialize agent
+                st.rerun()
+            st.markdown("[Get free token](https://huggingface.co/settings/tokens)")
         else:
             st.warning("Start Ollama: `ollama serve`")
     
@@ -277,6 +291,46 @@ with st.sidebar:
     else:
         st.markdown("### 🎤 Voice")
         st.info("Voice features not available in cloud mode")
+    
+    st.markdown("---")
+    
+    st.markdown("---")
+    
+    # Assistant Mode
+    st.markdown("### 🎭 Assistant Mode")
+    mode = st.selectbox("Select Role", ["General Assistant", "Academic Tutor", "Content Creator"])
+    
+    # Language Selection
+    st.markdown("### 🌐 Language")
+    language = st.selectbox("Select Language", ["English", "Tamil"])
+    
+    # Prompt Logic
+    if language == "Tamil":
+        system_prompt = TAMIL_SYSTEM_PROMPT
+        if mode == "Academic Tutor":
+            system_prompt += "\n\nNote: Focus on providing clear, educational explanations and answer keys."
+        elif mode == "Content Creator":
+            system_prompt += "\n\nNote: Focus on creative writing and engaging content."
+    else:
+        if mode == "Academic Tutor":
+            system_prompt = ACADEMIC_PROMPT
+        elif mode == "Content Creator":
+            system_prompt = CONTENT_CREATION_PROMPT
+        else:
+            system_prompt = SYSTEM_PROMPT
+            
+    st.markdown("---")
+    
+    # Document Upload
+    st.markdown("### 📂 Upload Document")
+    uploaded_file = st.file_uploader("Upload PDF/DOCX/TXT", type=['pdf', 'docx', 'txt'])
+    if uploaded_file:  
+        if st.button("Process Document"):
+            with st.spinner("Reading document..."):
+                # Save to temp file or process directly
+                # agent.ingest_file handles the file object
+                result = st.session_state.agent.ingest_file(uploaded_file, uploaded_file.name)
+                st.success(result)
     
     st.markdown("---")
     
@@ -345,75 +399,72 @@ if st.session_state.get("show_memories", False):
 # =============================================================================
 # Chat Interface
 # =============================================================================
-# Display chat history
-chat_container = st.container()
-with chat_container:
-    for message in st.session_state.messages:
-        role = message["role"]
-        content = message["content"]
-        
-        if role == "user":
-            st.markdown(f"""
-            <div class="chat-message user-message">
-                <strong>You:</strong><br>{content}
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
-            <div class="chat-message assistant-message">
-                <strong>🤖 Assistant:</strong><br>{content}
-            </div>
-            """, unsafe_allow_html=True)
-
-
 # =============================================================================
-# Input Area
+# Main Interface (Tabs)
 # =============================================================================
-st.markdown("---")
+tab1, tab2 = st.tabs(["💬 Chat", "🎨 Image Generation"])
 
-# Voice recording section (only if voice is available)
-if VOICE_AVAILABLE:
-    col1, col2 = st.columns([4, 1])
+with tab1:
+    # Chat Interface
+    chat_container = st.container()
+    with chat_container:
+        for message in st.session_state.messages:
+            role = message["role"]
+            content = message["content"]
+            
+            if role == "user":
+                st.markdown(f"""
+                <div class="chat-message user-message">
+                    <strong>You:</strong><br>{content}
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                <div class="chat-message assistant-message">
+                    <strong>🤖 Assistant:</strong><br>{content}
+                </div>
+                """, unsafe_allow_html=True)
+
+    # Input Area
+    st.markdown("---")
     
-    with col1:
-        user_input = st.chat_input("Type your message here...")
-    
-    with col2:
-        if st.button("🎤 Voice", use_container_width=True, help="Click to record voice input"):
-            with st.spinner("Recording... (5 seconds)"):
-                audio = record_audio(duration=5.0)
-                if audio is not None:
-                    with st.spinner("Transcribing..."):
-                        if not st.session_state.stt.is_ready():
-                            st.session_state.stt.load_model()
+    if VOICE_AVAILABLE:
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            user_input = st.chat_input("Type your message here...")
+        with col2:
+            if st.button("🎤 Voice", use_container_width=True):
+                with st.spinner("Recording..."):
+                    audio = record_audio(duration=5.0)
+                    if audio:
                         text = st.session_state.stt.transcribe(audio)
-                        if text and not text.startswith("Error"):
-                            user_input = text
-                            st.success(f"Transcribed: {text}")
-                        else:
-                            st.error("Could not transcribe audio")
-else:
-    user_input = st.chat_input("Type your message here...")
+                        if text: user_input = text
+    else:
+        user_input = st.chat_input("Type your message here...")
 
+    if user_input:
+        st.session_state.messages.append({"role": "user", "content": user_input})
+        with st.spinner("Thinking..."):
+            response = st.session_state.agent.chat(user_input, system_context=system_prompt)
+        st.session_state.messages.append({"role": "assistant", "content": response})
+        if VOICE_AVAILABLE and st.session_state.voice_enabled:
+            st.session_state.tts.speak_async(response)
+        st.rerun()
 
-# Process input
-if user_input:
-    # Add user message
-    st.session_state.messages.append({"role": "user", "content": user_input})
+with tab2:
+    st.header("🎨 AI Image Generation")
+    st.markdown("Generate images from text descriptions.")
     
-    # Generate response
-    with st.spinner("Thinking..."):
-        response = st.session_state.agent.chat(user_input)
+    img_prompt = st.text_input("Enter image description...", key="img_prompt")
     
-    # Add assistant message
-    st.session_state.messages.append({"role": "assistant", "content": response})
-    
-    # Voice output if enabled and available
-    if VOICE_AVAILABLE and st.session_state.voice_enabled:
-        st.session_state.tts.speak_async(response)
-    
-    # Rerun to update UI
-    st.rerun()
+    if st.button("Generate Image", type="primary"):
+        if img_prompt:
+            with st.spinner("Generating image... (This may take a moment)"):
+                image_path = st.session_state.agent.generate_image(img_prompt)
+                st.image(image_path, caption=img_prompt)
+                st.success(f"Image saved to {image_path}")
+        else:
+            st.warning("Please enter a description.")
 
 
 # =============================================================================

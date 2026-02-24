@@ -12,7 +12,15 @@ sys.path.append('..')
 import streamlit as st
 
 from .memory_manager import MemoryManager
+from .memory_manager import MemoryManager
 from .prompts import get_memory_aware_prompt, SYSTEM_PROMPT
+from .image_gen import ImageGenerator
+import pypdf
+import io
+try:
+    import docx
+except ImportError:
+    docx = None
 from config import (
     LLM_PROVIDER,
     OLLAMA_BASE_URL,
@@ -50,6 +58,7 @@ class MemoryAgent:
         self.user_id = user_id
         self.memory = MemoryManager(user_id=user_id)
         self.provider = self._get_provider()
+        self.image_gen = ImageGenerator()
         self._setup_llm()
     
     def _get_provider(self) -> str:
@@ -79,6 +88,8 @@ class MemoryAgent:
         try:
             if hasattr(st, 'secrets') and 'HF_TOKEN' in st.secrets:
                 return st.secrets['HF_TOKEN']
+            if 'HF_TOKEN' in st.session_state:
+                return st.session_state.HF_TOKEN
         except:
             pass
         return os.getenv('HF_TOKEN', HF_TOKEN)
@@ -138,7 +149,7 @@ class MemoryAgent:
             print(f"Warning: Could not connect to Ollama: {e}")
             print("Make sure Ollama is running: ollama serve")
     
-    def chat(self, user_message: str) -> str:
+    def chat(self, user_message: str, system_context: str = SYSTEM_PROMPT) -> str:
         """
         Process a user message and generate a response.
         
@@ -150,15 +161,19 @@ class MemoryAgent:
         5. Store response in memory
         6. Return response
         """
-        # Step 1: Store user message
+        import threading
+
+        # Step 1: Store user message (can be slow due to embedding if we extract facts)
         self.memory.add_user_message(user_message)
         
-        # Step 2 & 3: Get context and build prompt
+        # Step 2 & 3: Get context and build prompt (Retrieval is necessary for quality)
         short_term, long_term = self.memory.get_context_for_query(user_message)
+        
         prompt = get_memory_aware_prompt(
             user_message=user_message,
             short_term_context=short_term,
-            long_term_memories=long_term
+            long_term_memories=long_term,
+            system_context=system_context
         )
         
         # Step 4: Generate response
@@ -186,15 +201,17 @@ class MemoryAgent:
                 print(f"LLM error: {e}")
                 response = self._fallback_response(user_message)
         
-        # Step 5: Store response
-        self.memory.add_assistant_message(response)
+        # Step 5: Store response & Periodic summarization
+        # We run these in a background thread to return the response immediately to the user
+        def background_tasks(resp):
+            self.memory.add_assistant_message(resp)
+            self.memory.periodic_summarization()
         
-        # Periodic summarization check
-        self.memory.periodic_summarization()
+        threading.Thread(target=background_tasks, args=(response,), daemon=True).start()
         
         return response
-    
-    def chat_stream(self, user_message: str) -> Generator[str, None, None]:
+
+    def chat_stream(self, user_message: str, system_context: str = SYSTEM_PROMPT) -> Generator[str, None, None]:
         """Stream a response token by token."""
         # Store user message
         self.memory.add_user_message(user_message)
@@ -204,7 +221,8 @@ class MemoryAgent:
         prompt = get_memory_aware_prompt(
             user_message=user_message,
             short_term_context=short_term,
-            long_term_memories=long_term
+            long_term_memories=long_term,
+            system_context=system_context
         )
         
         full_response = ""
@@ -239,10 +257,14 @@ class MemoryAgent:
                 yield error_msg
                 full_response = error_msg
         
-        # Store complete response
-        self.memory.add_assistant_message(full_response.strip())
-        self.memory.periodic_summarization()
-    
+        # Store complete response & summarize in background
+        import threading
+        def bg_storage(resp):
+            self.memory.add_assistant_message(resp.strip())
+            self.memory.periodic_summarization()
+        
+        threading.Thread(target=bg_storage, args=(full_response,), daemon=True).start()
+
     def _fallback_response(self, user_message: str) -> str:
         """Fallback response when LLM is not available."""
         if self.provider == "huggingface":
@@ -266,6 +288,63 @@ class MemoryAgent:
         """Explicitly remember a fact."""
         memory_id = self.memory.store_memory(fact, memory_type="explicit")
         return f"I'll remember that: {fact}"
+    
+    def generate_image(self, prompt: str) -> str:
+        """Generate an image from prompt."""
+        return self.image_gen.generate(prompt)
+
+    def ingest_file(self, file_obj, filename: str) -> str:
+        """Ingest a document (PDF/DOCX/TXT) into memory with improved chunking."""
+        text = ""
+        try:
+            if filename.lower().endswith('.pdf'):
+                pdf = pypdf.PdfReader(file_obj)
+                for page in pdf.pages:
+                    text += (page.extract_text() or "") + "\n"
+            elif filename.lower().endswith('.docx'):
+                if docx:
+                    doc = docx.Document(file_obj)
+                    text = "\n".join([p.text for p in doc.paragraphs])
+                else:
+                    return "Error: python-docx not installed."
+            elif filename.lower().endswith('.txt'):
+                text = file_obj.read().decode('utf-8')
+            else:
+                return "Unsupported file format."
+                
+            if text.strip():
+                # IMPROVED ACCURACY: Chunking the document instead of just taking the first 1000 chars
+                # This ensures the entire document is searchable in vector memory
+                chunk_size = 1000
+                overlap = 200
+                chunks = []
+                
+                for i in range(0, len(text), chunk_size - overlap):
+                    chunk = text[i : i + chunk_size]
+                    if chunk.strip():
+                        chunks.append(chunk)
+                
+                # Store chunks in long-term memory
+                # Process in batches or background to keep UI responsive
+                import threading
+                def store_chunks_bg(file_chunks, name):
+                    count = 0
+                    for i, chunk in enumerate(file_chunks):
+                        self.memory.store_memory(
+                            f"Content from {name} (Part {i+1}):\n{chunk}",
+                            memory_type="document",
+                            metadata={"source": name, "chunk_index": i}
+                        )
+                        count += 1
+                    print(f"Stored {count} chunks from {name}")
+
+                threading.Thread(target=store_chunks_bg, args=(chunks, filename), daemon=True).start()
+                
+                return f"Processing '{filename}' ({len(chunks)} parts) in background. It will be available in memory soon."
+            else:
+                return "Could not extract text from file."
+        except Exception as e:
+            return f"Error reading file: {str(e)}"
     
     def recall(self, query: str, n_results: int = 5) -> str:
         """Search memories related to a query."""
